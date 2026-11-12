@@ -22,7 +22,12 @@ fi
         write('omarchy-shell', `
 case "$1:$2" in
   shell:ping) echo ok ;;
-  velunori:status) echo '{"ready":true,"widgets":[{"id":"velunori.clock","visible":true,"width":150}]}' ;;
+  velunori:status)
+    center=false
+    if [[ -f "$SESSION_TEST_STATE.center" && $(cat "$SESSION_TEST_STATE.center") == open ]]; then center=true; fi
+    printf '{"ready":true,"controlCenterOpened":%s,"widgets":[{"id":"velunori.clock","visible":true,"width":150}]}\n' "$center" ;;
+  velunori:settings) echo open > "$SESSION_TEST_STATE.center" ;;
+  velunori:hideSettings) echo closed > "$SESSION_TEST_STATE.center" ;;
   shell:summon) echo open > "$SESSION_TEST_STATE"; echo ok ;;
   shell:hide) echo closed > "$SESSION_TEST_STATE" ;;
   velunori.clock:status)
@@ -46,6 +51,8 @@ test('session checker verifies visible widget and calendar lifecycle', () => {
     assert.equal(result.status, 0, result.stdout + result.stderr);
     assert.match(result.stdout, /calendar opened/);
     assert.match(result.stdout, /calendar closed/);
+    assert.match(result.stdout, /Control Center opened/);
+    assert.match(result.stdout, /Control Center closed/);
 });
 
 test('successful restart with a crash report must fail the session check', () => {
