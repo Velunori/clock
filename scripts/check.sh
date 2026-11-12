@@ -7,6 +7,7 @@ starts="${VELUNORI_TEST_STARTS:-1}"
 [[ "$starts" =~ ^[0-9]+$ ]] && (( starts >= 1 && starts <= 20 )) || { echo 'Test starts must be 1..20' >&2; exit 1; }
 [[ "$layout" == copy || "$layout" == symlink ]] || { echo 'Unknown test layout' >&2; exit 1; }
 [[ -f "$core_dir/kit/Theme.qml" ]] || { echo 'Velunori core 0.2 is required.' >&2; exit 1; }
+python3 -m unittest discover -s "$repo_dir/tests" -p 'test_*.py'
 node "$repo_dir/tests/calendar.test.mjs"
 node "$repo_dir/tests/session-check.test.mjs"
 runtime_dir=$(mktemp -d)
