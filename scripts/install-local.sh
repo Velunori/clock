@@ -13,10 +13,10 @@ core = pathlib.Path(sys.argv[1])
 try:
     manifest = json.loads((core / 'manifest.json').read_text())
     version = tuple(int(p) for p in manifest['version'].split('.'))
-    assert manifest['id'] == 'velunori.core' and version >= (0, 2, 0)
+    assert manifest['id'] == 'velunori.core' and version >= (0, 4, 1)
     assert (core / 'kit' / 'Panel.qml').is_file()
 except (OSError, ValueError, KeyError, AssertionError):
-    sys.exit('Install Velunori core 0.2.0 or later before installing the clock.')
+    sys.exit('Install Velunori core 0.4.1 or later before installing the clock.')
 PY
 bash "$core_dir/scripts/prepare-dev-layout.sh"
 if [[ -e "$plugin_dir" || -L "$plugin_dir" ]]; then

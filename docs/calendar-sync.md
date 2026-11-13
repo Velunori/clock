@@ -1,21 +1,47 @@
-# Calendar integration work in progress
+# Calendar accounts and event storage
 
-The requested target is bidirectional Google Calendar and iCloud synchronization, editable local calendars, month markers and an agenda for the selected day (today on opening).
+Local calendars are editable and persistent. The panel shows a month grid with calendar-colored markers and the selected day's agenda, defaulting to today. All-day end dates are inclusive in the editor and exclusive in storage/provider APIs.
 
-The current backend foundation implements persistent local calendars and event CRUD in SQLite. Cloud connections and the calendar UI are not implemented yet; do not describe this foundation as a finished synchronization feature.
+## Local data
 
-Local data: `$XDG_DATA_HOME/velunori/clock/calendar.sqlite3`, falling back to `~/.local/share`. All-day end dates are exclusive. Timed events carry a UTC offset and display in the system time zone. The directory is private (0700), database 0600. No credentials are currently collected or stored.
+Data is in `$XDG_DATA_HOME/velunori/clock`, falling back to `~/.local/share/velunori/clock`. `calendar.sqlite3` stores local events and cloud cache. Account files live under `accounts/`. Directories use 0700 and account/database files use 0600. Credentials are stored on disk, **not encrypted**. Do not share this directory or commit it.
 
-`calendar_backend.py` reads one JSON request on stdin and returns one JSON response. Supported actions: `snapshot`, `addCalendar`, `visibility`, `save`, `delete`. Mutating remote calendar records is explicitly rejected until provider integrations exist.
+Local calendars require Python 3 only. For cloud providers run:
 
-## Next implementation steps
+```bash
+bash ~/dev/Velunori/clock/scripts/setup-deps.sh
+```
 
-- Wire the backend to the existing QML calendar; add source filters, colored day markers, today's agenda, create/edit/delete forms, bounded popup height and scrolling.
-- Google: desktop OAuth client with loopback sign-in; Calendar API calendar discovery and expanded event listing; create, patch and delete with ETag conflict checks. Never use an account password.
-- iCloud: CalDAV discovery using an app-specific password; preserve original iCalendar properties on updates. Handle recurrence overrides and exclusions without deleting a series accidentally.
-- Keep cached events after a failed sync and show last successful synchronization. Serialize simultaneous writes from different monitor widgets.
-- Add mocked provider tests and exercise actual sign-in on user-connected accounts before claiming live cloud synchronization.
+## Google
 
-Provider dependencies can be installed into a private project environment with `bash scripts/setup-deps.sh`. The coding environment could not download them because DNS/network access was unavailable. Local storage requires only Python's standard library.
+1. In Google Cloud, enable the Google Calendar API for your project and configure OAuth consent. For a testing application, add your own account as a test user.
+2. Create an OAuth client of type **Desktop app** and download its original JSON file.
+3. In the calendar panel open **Calendars → Google**, enter the local path to that file, and select **Connect account**.
+4. Finish consent in your system browser within three minutes. No account password is collected by Velunori.
+5. The primary calendar is enabled initially. Enable other calendars under Calendars as needed; shared calendars respect Google access roles.
 
-References: [Google desktop OAuth](https://developers.google.com/identity/protocols/oauth2/native-app), [Google event API](https://developers.google.com/workspace/calendar/api/v3/reference/events), [Apple app-specific passwords](https://support.apple.com/en-us/102654), [python-caldav](https://caldav.readthedocs.io/latest/tutorial.html).
+Authorization uses Calendar event read/write access and read-only calendar discovery. A local loopback callback receives the authorization code; refresh credentials are retained privately. No shared project/client credentials are shipped with this plugin.
+
+[Google desktop OAuth](https://developers.google.com/identity/protocols/oauth2/native-app), [Calendar authorization](https://developers.google.com/workspace/calendar/api/auth).
+
+## iCloud
+
+1. Create an app-specific password in your Apple Account settings.
+2. In **Calendars → iCloud**, enter the account email and that app-specific password. Do not use your main password.
+3. Select Connect account. Discovered calendars appear in the source list.
+
+CalDAV resources must use HTTPS addresses in the icloud.com domain. Server permissions determine whether a shared calendar accepts writes.
+
+[Apple app-specific passwords](https://support.apple.com/en-us/102654), [python-caldav documentation](https://caldav.readthedocs.io/latest/tutorial.html).
+
+## Synchronization and conflicts
+
+Enabled cloud calendars sync when viewing a new month and every ten minutes while the panel is open. Sync also runs after account connection and remote saves. Manual Sync is available in the agenda footer and source settings. Last successful sync and failures appear under Calendars. Failed requests retain cached events.
+
+Writes use cached ETags and reject stale edits. Sync and reopen an event after a conflict. For recurring events, edits create an occurrence override; deletion excludes that occurrence. Other occurrences, attendees, reminders and unrelated properties are preserved. New events are single events; creating recurrence rules or editing an entire series is not supported in this version.
+
+Disconnect removes this plugin's local account credentials, calendar records and cached events. It does not remove remote calendars/events or revoke Google consent/Apple app-specific passwords; revoke those in the provider's account settings if desired.
+
+## Validation limits
+
+Local storage and the QML transport are tested in temporary directories. Provider tests mock HTTP pagination/conflicts and use real iCalendar fixtures for recurrence edits/deletions. Real Google/iCloud sign-in and writes have **not** been exercised; complete those checks with a disposable test event before relying on cloud sync. No credentials were provided to the coding agent and no real cloud events were changed during implementation.

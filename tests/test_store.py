@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -37,6 +38,14 @@ class StoreTests(unittest.TestCase):
         dispatch(dict(action='visibility', id='local', enabled=False))
         self.assertEqual(dispatch(dict(action='snapshot', start='2026-11-12', end='2026-11-12'))['events'], [])
         dispatch(dict(action='delete', id=result['id']))
+    def test_dst_transition_requires_offset_and_preserves_instants(self):
+        with patch.dict(store.os.environ, {'TZ': 'Europe/Berlin'}):
+            for day, clock in [('2026-03-29','02:30'), ('2026-10-25','02:30')]:
+                with self.assertRaises(ValueError):
+                    store.validate_event(dict(title='DST',start=day+'T'+clock,end=day+'T04:00'))
+            event = store.validate_event(dict(title='DST',start='2026-10-25T02:30+01:00',end='2026-10-25T03:00+01:00'))
+            self.assertEqual(event['start'], '2026-10-25T02:30:00+01:00')
+
     def test_persistence(self):
         store.save_event('local', dict(title='Saved',start='2026-11-12T10:00:00+01:00',end='2026-11-12T11:00:00+01:00'))
         self.assertEqual(store.snapshot('2026-11-12','2026-11-12')['events'][0]['title'], 'Saved')

@@ -2,3 +2,4 @@ requests>=2.32,<3
 caldav>=2.0,<4
 icalendar>=6.3,<8
 google-auth-oauthlib>=1.2,<2
+recurring-ical-events>=3.8,<4

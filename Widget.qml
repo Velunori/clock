@@ -28,6 +28,8 @@ Item {
     function toggle() { if (opened) close(); else open(); }
     SystemClock { id: clock; precision: String(root.setting("timeFormat", "HH:mm")).indexOf("s") >= 0 ? SystemClock.Seconds : SystemClock.Minutes }
 
+    Backend { id: data; active: root.opened }
+
     WidgetButton {
         anchors.fill: parent
         bar: root.bar
@@ -70,26 +72,30 @@ Item {
             bar: root.bar
             owner: root
             open: root.opened
-            contentWidth: 376
-            contentHeight: calendar.implicitHeight + padding * 2 + 2
+            contentWidth: fittedContentWidth(420)
+            contentHeight: fittedContentHeight(calendar.implicitHeight + padding * 2 + 2, screenH > 0 ? Math.floor(screenH * .8) : 640)
             focusTarget: keys
             function resetToday() { calendar.resetToday(); }
-            PanelKeyCatcher {
+            FocusScope {
                 id: keys
                 anchors.fill: parent
-                onCloseRequested: root.close()
-                onMoveRequested: function(dx, dy) { if (dx) calendar.step(dx); }
-                Keys.onReleased: function(event) {
-                    if (event.key === Qt.Key_Home) {
-                        calendar.resetToday();
-                        event.accepted = true;
+                focus: true
+                Keys.onPressed: function(event) {
+                    if (event.key === Qt.Key_Escape) { if (!calendar.back()) root.close(); event.accepted = true; }
+                    else if (!calendar.editing && !calendar.sourcesOpen) {
+                        if (event.key === Qt.Key_Left || event.key === Qt.Key_Right) { calendar.step(event.key === Qt.Key_Left ? -1 : 1); event.accepted = true; }
+                        else if (event.key === Qt.Key_Home) { calendar.resetToday(); event.accepted = true; }
                     }
                 }
                 CalendarContent {
                     id: calendar
-                    width: parent.width
+                    anchors.fill: parent
+                    backend: data
                     bar: root.bar
                     today: clock.date
+                    onWindowStartChanged: data.start = windowStart
+                    onWindowEndChanged: data.end = windowEnd
+                    Component.onCompleted: { data.start = windowStart; data.end = windowEnd; }
                     weekStart: Calendar.normalizedWeekStart(root.setting("weekStartDay", Qt.locale().firstDayOfWeek))
                 }
             }

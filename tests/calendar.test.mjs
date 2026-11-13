@@ -35,3 +35,18 @@ test('DST month cells have consecutive local calendar dates', () => {
         }
     }
 });
+
+
+test('agenda spans days and source filters also control marker colors', () => {
+    const events = [
+        {startDay:'2026-11-12',endDay:'2026-11-13',calendar_id:'a',color:'#123456'},
+        {startDay:'2026-11-13',endDay:'2026-11-13',calendar_id:'b',color:'#abcdef'},
+        {startDay:'2026-11-13',endDay:'2026-11-13',calendar_id:'a',color:'#123456'}
+    ];
+    assert.equal(model.eventsForDay(events,'2026-11-12','').length,1);
+    assert.equal(model.eventsForDay(events,'2026-11-13','a').length,2);
+    assert.equal(model.eventsForDay(events,'2026-11-14','').length,0);
+    assert.equal(JSON.stringify(model.dayColors(events,'2026-11-13','')),JSON.stringify(['#123456','#abcdef']));
+    assert.equal(model.addDays('2026-12-31',1),'2027-01-01');
+    assert.equal(model.addDays('2026-02-30',1),'');
+});

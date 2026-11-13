@@ -1,2 +1,6 @@
 Widget 1.0 Widget.qml
 CalendarContent 1.0 CalendarContent.qml
+Backend 1.0 Backend.qml
+EventEditor 1.0 EventEditor.qml
+Field 1.0 Field.qml
+Select 1.0 Select.qml

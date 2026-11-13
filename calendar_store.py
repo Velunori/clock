@@ -76,11 +76,14 @@ def validate_event(request):
             for moment in (start,end):
                 if moment.tzinfo is None:
                     moment=moment.replace(tzinfo=zone)
+                    if moment.replace(fold=0).utcoffset() != moment.replace(fold=1).utcoffset():
+                        # Reject rather than silently choosing a repeated/nonexistent hour.
+                        raise ValueError('This time crosses a daylight saving change. Use an explicit offset, e.g. 02:30+01:00.')
                     if moment.astimezone(timezone.utc).astimezone(zone).replace(tzinfo=None) != moment.replace(tzinfo=None):
                         raise ValueError('This time does not exist in your time zone')
                 moments.append(moment)
             start,end=moments
-    except (KeyError, TypeError, ValueError) as error: raise ValueError('Choose valid start and end dates/times') from error
+    except (KeyError, TypeError) as error: raise ValueError('Choose valid start and end dates/times') from error
     invalid_range = end <= start if allday else end.timestamp() <= start.timestamp()
     if invalid_range: raise ValueError('End must be after start')
     return dict(title=title,start=start.isoformat(),end=end.isoformat(),allDay=allday,

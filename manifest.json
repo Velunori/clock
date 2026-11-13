@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "velunori.clock",
   "name": "Velunori Clock",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "author": "Velunori",
   "description": "Clock and calendar built with the Velunori core design kit.",
   "kinds": ["bar-widget"],
