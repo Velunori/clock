@@ -10,7 +10,8 @@ import calendar_store as store
 def dispatch(request):
     action = request.get('action', 'snapshot')
     if action == 'snapshot':
-        return store.snapshot(request['start'], request['end'])
+        import google_oauth
+        return dict(store.snapshot(request['start'], request['end']), googleSignInReady=google_oauth.ready())
     if action in ('connectGoogle', 'connectIcloud', 'sync', 'disconnect'):
         import calendar_cloud as cloud
         with cloud.write_lock():
@@ -25,9 +26,13 @@ def dispatch(request):
                 path.unlink(missing_ok=True)
                 return {}
             try: cloud.sync(request['start'], request['end'])
-            except Exception:
-                with store.database() as db: db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', ('syncError', 'Sync failed. Cached events have been kept.'))
-                if action == 'sync': raise
+            except Exception as error:
+                message = 'Sync failed. Cached events have been kept.'
+                if isinstance(error, cloud.InvalidRemoteEvent): message += ' ' + str(error)
+                else: message += ' Check your connection and account authorization, then try again.'
+                with store.database() as db: db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', ('syncError', message))
+                if action == 'sync':
+                    raise ValueError(message) from None
                 return {'warning': 'Account connected. Initial sync failed; try Sync again.'}
         return {}
     if action == 'addCalendar':

@@ -28,6 +28,15 @@ class StoreTests(unittest.TestCase):
     def test_invalid_range(self):
         with self.assertRaises(ValueError):
             store.save_event('local', dict(title='Invalid', start='2026-11-12', end='2026-11-12', allDay=True))
+        with self.assertRaises(ValueError):
+            store.validate_event(dict(title='Backwards', start='2026-11-12T11:00Z', end='2026-11-12T10:00Z'))
+
+    def test_instant_event_at_midnight_appears_only_on_its_day(self):
+        with patch.dict(store.os.environ, {'TZ': 'UTC'}):
+            identifier = store.save_event('local', dict(title='Instant', start='2026-11-12T00:00Z', end='2026-11-12T00:00Z'))
+            self.assertEqual(store.snapshot('2026-11-12', '2026-11-12')['events'][0]['id'], identifier)
+            self.assertEqual(store.snapshot('2026-11-11', '2026-11-11')['events'], [])
+
     def test_readonly(self):
         calendar = store.add_calendar('Shared', provider='google', account='test', remote='test', readonly=True)
         with self.assertRaises(ValueError):

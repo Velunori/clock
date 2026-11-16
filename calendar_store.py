@@ -84,8 +84,8 @@ def validate_event(request):
                 moments.append(moment)
             start,end=moments
     except (KeyError, TypeError) as error: raise ValueError('Choose valid start and end dates/times') from error
-    invalid_range = end <= start if allday else end.timestamp() <= start.timestamp()
-    if invalid_range: raise ValueError('End must be after start')
+    invalid_range = end <= start if allday else end.timestamp() < start.timestamp()
+    if invalid_range: raise ValueError('End must be after start' if allday else 'End must not be before start')
     return dict(title=title,start=start.isoformat(),end=end.isoformat(),allDay=allday,
                 location=str(request.get('location',''))[:1000],description=str(request.get('description',''))[:10000])
 
@@ -120,7 +120,9 @@ def day_keys(row):
         first=date.fromisoformat(row['start']); last=date.fromisoformat(row['end'])-timedelta(days=1)
     else:
         first=datetime.fromisoformat(row['start']).astimezone(local_zone()).date()
-        last=(datetime.fromisoformat(row['end']).astimezone(local_zone())-timedelta(microseconds=1)).date()
+        end=datetime.fromisoformat(row['end']).astimezone(local_zone())
+        start=datetime.fromisoformat(row['start']).astimezone(local_zone())
+        last=(end-timedelta(microseconds=1)).date() if end.timestamp() > start.timestamp() else first
     return first.isoformat(), last.isoformat()
 
 

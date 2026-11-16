@@ -8,10 +8,16 @@ import os
 from pathlib import Path
 from urllib.parse import quote, urlparse
 import uuid
+from zoneinfo import ZoneInfo
 import calendar_store as store
+import google_oauth
 
 SCOPES = ['https://www.googleapis.com/auth/calendar.events', 'https://www.googleapis.com/auth/calendar.calendarlist.readonly']
 API = 'https://www.googleapis.com/calendar/v3/'
+
+
+class InvalidRemoteEvent(ValueError):
+    """Safe, credential-free diagnostics for rejected provider data."""
 
 
 @contextmanager
@@ -74,15 +80,17 @@ class Google:
 
     def events(self, calendar, start, end):
         rows = self.pages('calendars/'+quote(calendar['remote'], safe='')+'/events', singleEvents='true',
-                          timeMin=start.isoformat(), timeMax=end.isoformat(), maxResults=2500)
+                          timeMin=start.isoformat(), timeMax=end.isoformat(), timeZone='UTC', maxResults=2500)
         result = []
         for row in rows:
             if row.get('status') == 'cancelled': continue
             a, b = row.get('start', {}), row.get('end', {})
             allday = 'date' in a
-            payload = dict(title=row.get('summary') or '(Untitled)', start=a.get('date', a.get('dateTime')), end=b.get('date', b.get('dateTime')),
+            payload = dict(title=str(row.get('summary') or '').strip() or '(Untitled)', start=google_time(a), end=google_time(b),
                            allDay=allday, location=row.get('location', ''), description=row.get('description', ''))
-            result.append(record(calendar, payload, row['id'], row.get('etag', '')))
+            try: result.append(record(calendar, payload, row['id'], row.get('etag', '')))
+            except (ValueError, KeyError, TypeError) as error:
+                raise InvalidRemoteEvent('Google returned an event with invalid dates or content.') from error
         return result
 
     def save(self, calendar, event, previous=None):
@@ -102,19 +110,29 @@ class Google:
         self.request('DELETE', 'calendars/'+quote(calendar['remote'], safe='')+'/events/'+quote(previous['remote'], safe=''), headers={'If-Match': previous['etag']})
 
 
-def connect_google(client_file):
+def google_time(value):
+    if 'date' in value: return value['date']
+    try:
+        moment = datetime.fromisoformat(value['dateTime'])
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=ZoneInfo(value.get('timeZone') or 'UTC'))
+        return moment.isoformat()
+    except (KeyError, TypeError, ValueError) as error:
+        raise InvalidRemoteEvent('Google returned an event with invalid dates or time zone.') from error
+
+
+def connect_google(client_file=''):
+    config = google_oauth.load_client(Path(client_file).expanduser() if client_file else None)
     from google_auth_oauthlib.flow import InstalledAppFlow
-    path = Path(client_file).expanduser()
-    if not path.is_file() or path.stat().st_size > 100000: raise ValueError('Choose a Google Desktop OAuth client JSON file')
-    config = json.loads(path.read_text())
-    if 'installed' not in config: raise ValueError('Use an OAuth client of type Desktop app')
-    # Restrict endpoints from user-provided files; credentials must only reach Google.
-    settings = config['installed']
-    if settings.get('auth_uri') not in ('https://accounts.google.com/o/oauth2/auth', 'https://accounts.google.com/o/oauth2/v2/auth') or settings.get('token_uri') != 'https://oauth2.googleapis.com/token':
-        raise ValueError('Use the original Desktop client JSON downloaded from Google')
+    from oauthlib.oauth2 import OAuth2Error
     flow = InstalledAppFlow.from_client_config(config, SCOPES, autogenerate_code_verifier=True)
-    credentials = flow.run_local_server(host='127.0.0.1', port=0, open_browser=True, timeout_seconds=180,
-        authorization_prompt_message='', success_message='Calendar connected. You may close this tab.')
+    try:
+        credentials = flow.run_local_server(host='127.0.0.1', port=0, open_browser=True, timeout_seconds=180,
+            authorization_prompt_message='', success_message='Google sign-in received. Return to Velunori to check the connection.')
+    except (OAuth2Error, TimeoutError):
+        raise ValueError('Google sign-in was cancelled, expired or denied. Press Connect Google to try again.') from None
+    if credentials is None or not credentials.has_scopes(SCOPES) or (credentials.granted_scopes is not None and not set(SCOPES).issubset(credentials.granted_scopes)):
+        raise ValueError('Google calendar access was not granted. Connect again and approve both calendar permissions.')
     identifier = str(uuid.uuid4())
     write_account(identifier, {'provider': 'google', 'credentials': json.loads(credentials.to_json())})
     try:
@@ -137,10 +155,11 @@ def icloud_url(url):
 
 
 class ICloud:
-    def __init__(self, account=None, username=None, password=None):
+    def __init__(self, account=None, username=None, password=None, url='https://caldav.icloud.com'):
         import caldav
+        server = icloud_url(url)
         data = read_account(account) if account else {'username': username, 'password': password}
-        self.client = caldav.DAVClient(url='https://caldav.icloud.com', username=data['username'], password=data['password'], timeout=25)
+        self.client = caldav.DAVClient(url=server, username=data['username'], password=data['password'], timeout=25)
 
     def request(self, method, url, **kwargs):
         return check_response(self.client.request(icloud_url(url), method=method, **kwargs))
@@ -254,7 +273,7 @@ def connect_icloud(username, password):
 
 
 def provider(calendar):
-    return Google(calendar['account']) if calendar['provider'] == 'google' else ICloud(calendar['account'])
+    return Google(calendar['account']) if calendar['provider'] == 'google' else ICloud(calendar['account'], url=calendar['remote'])
 
 
 def record(calendar, payload, remote, etag):

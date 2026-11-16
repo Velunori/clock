@@ -18,13 +18,19 @@ ShellRoot {
         if (path) {
             var state = Quickshell.env("VELUNORI_PREVIEW_STATE");
             if (state === "editor") calendar.editEvent(fake.snapshot.events[0]);
-            else if (state === "sources" || state === "sources-icloud") {
+            else if (state === "sources" || state === "sources-icloud" || state === "sources-google") {
                 calendar.sourcesOpen = true;
+                calendar.sourcePage = state === "sources" ? "overview" : "connect";
                 findItem(calendar, "accountConnection").provider = state === "sources-icloud" ? "icloud" : "google";
             }
-            Qt.callLater(function() { surface.grabToImage(function(result) { result.saveToFile(path); Qt.quit(); }); });
+            previewCapture.start();
         }
         else Qt.quit();
+    }
+    Timer {
+        id: previewCapture
+        interval: 150
+        onTriggered: surface.grabToImage(function(result) { result.saveToFile(Quickshell.env("VELUNORI_PREVIEW_PATH")); Qt.quit(); })
     }
     Backend {
         id: transport
@@ -47,7 +53,7 @@ ShellRoot {
         property bool busy: false
         property string errorText: ""
         property var lastRequest: ({})
-        property var snapshot: ({timezone: "Europe/Berlin", calendars: [{id: "local", name: "Personal", color: "#c4aff1", provider: "local", readonly: false, enabled: true}], events: [
+        property var snapshot: ({timezone: "Europe/Berlin", googleSignInReady: true, calendars: [{id: "local", name: "Personal", color: "#c4aff1", provider: "local", readonly: false, enabled: true}], events: [
             {id: "sample", calendar_id: "local", title: "Design review", start: "2026-11-12T10:00:00+01:00", end: "2026-11-12T11:00:00+01:00", startDay: "2026-11-12", endDay: "2026-11-12", color: "#c4aff1", calendarName: "Personal", provider: "local", location: "Studio", description: "Review the new calendar", allDay: false, readonly: false}
         ]})
         signal completed(var request, var response)
@@ -88,12 +94,28 @@ ShellRoot {
         interval: 80
         onTriggered: {
             var button = findItem(calendar, "connectAccount");
+            check(!button.visible, "calendar overview does not show a detached connection action");
+            var addAccount = findItem(calendar, "addAccount");
+            var actionPoint = addAccount.mapToItem(calendar, 0, 0);
+            check(addAccount.visible && actionPoint.y + addAccount.height <= calendar.height + 1, "account management stays accessible");
+            findItem(calendar, "newCalendar").clicked();
+            check(calendar.sourcePage === "new" && calendar.back() && calendar.sourcePage === "overview", "new calendar has its own view and back navigation");
+            addAccount.clicked();
+            check(calendar.sourcePage === "connect", "add account opens connection view");
             var point = button.mapToItem(calendar, 0, 0);
             check(button.visible && point.y >= 0 && point.y + button.height <= calendar.height + 1, "account connect action stays fully visible");
             check(button.height >= 38, "account connect action is not compressed");
             var scroll = findItem(calendar, "calendarScroll");
             scroll.contentY = Math.max(0, scroll.contentHeight - scroll.height);
             check(Math.abs(button.mapToItem(calendar, 0, 0).y - point.y) < 1, "scrolling settings leaves account action pinned");
+            check(button.enabled, "registered Google client needs no user setup file");
+            button.clicked();
+            check(fake.lastRequest.action === "connectGoogle" && fake.lastRequest.clientFile === undefined, "Connect Google starts sign-in without a JSON path");
+            check(calendar.back() && calendar.sourcePage === "overview" && calendar.sourcesOpen, "back from account connection returns to calendars");
+            addAccount.clicked();
+            fake.snapshot = Object.assign({}, fake.snapshot, {googleSignInReady: false});
+            check(!button.enabled, "unconfigured Google sign-in is unavailable");
+            check(findItem(calendar, "googleSignInUnavailable").visible, "unconfigured build explains unavailable Google sign-in");
             calendar.sourcesOpen = false;
             uiDone = true; finish();
         }
@@ -120,11 +142,21 @@ ShellRoot {
             findItem(calendar, "eventTitle").text = "Edited";
             findItem(calendar, "saveEvent").clicked();
             check(fake.lastRequest.action === "save" && fake.lastRequest.event.title === "Edited" && fake.lastRequest.event.start === fake.snapshot.events[0].start, "editor preserves offset when changing only title");
+            fake.errorText = "End must be after start";
             calendar.back();
+            check(fake.errorText === "", "leaving editor clears stale validation error");
             var newAction = findItem(calendar, "newEvent");
             var actionPoint = newAction.mapToItem(calendar, 0, 0);
             check(actionPoint.y >= 0 && actionPoint.y + newAction.height <= calendar.height + 1, "new event action stays visible in a short panel");
+            fake.errorText = "End must be after start";
             calendar.sourcesOpen = true;
+            check(fake.errorText === "", "opening account settings clears stale validation error");
+            fake.snapshot = Object.assign({}, fake.snapshot, {lastSync: "2026-11-12T12:00:00Z", calendars: [
+                {id: "google", name: "personal.calendar.with.a.very.long.name@example.com", color: "#c4aff1", provider: "google", account: "fixture", enabled: true},
+                {id: "holidays-de", name: "Holidays in Germany", color: "#a0ddbf", provider: "google", account: "fixture", enabled: false},
+                {id: "holidays-pl", name: "Holidays in Poland", color: "#91baf0", provider: "google", account: "fixture", enabled: false},
+                fake.snapshot.calendars[0]
+            ]});
             footerTest.start();
         }
     }

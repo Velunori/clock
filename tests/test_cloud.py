@@ -47,6 +47,48 @@ class CloudTests(unittest.TestCase):
     def test_conflicts_are_explicit(self):
         response = Mock(status_code=412)
         with self.assertRaisesRegex(ValueError, 'another device'): cloud.check_response(response)
+
+    def test_google_sync_instant_event_and_explicit_timezone(self):
+        identifier = store.add_calendar('Google', provider='google', account='account', remote='calendar')
+        provider = object.__new__(cloud.Google)
+        provider.pages = Mock(return_value=[
+            {'id': 'instant', 'etag': 'v1', 'start': {'dateTime': '2026-11-12T00:00:00Z'}, 'end': {'dateTime': '2026-11-12T00:00:00Z'}},
+            {'id': 'zone', 'summary': '   ', 'start': {'dateTime': '2026-11-12T10:00:00', 'timeZone': 'America/New_York'},
+             'end': {'dateTime': '2026-11-12T16:00:00Z'}},
+            {'id': 'cancelled', 'status': 'cancelled'}])
+        with patch.dict(store.os.environ, {'TZ': 'UTC'}), patch.object(cloud, 'provider', return_value=provider):
+            cloud.sync('2026-11-01', '2026-11-30')
+            events = store.snapshot('2026-11-12', '2026-11-12')['events']
+            self.assertEqual(len(events), 2)
+            self.assertTrue(all(event['calendar_id'] == identifier for event in events))
+            self.assertEqual(events[0]['start'], events[0]['end'])
+            self.assertEqual(events[0]['endDay'], '2026-11-12')
+            self.assertEqual(events[1]['start'], '2026-11-12T15:00:00+00:00')
+            self.assertEqual(events[1]['title'], '(Untitled)')
+            self.assertEqual(provider.pages.call_args.kwargs['timeZone'], 'UTC')
+            events[0]['title'] = 'Edited instant'
+            provider.request = Mock()
+            provider.save({'remote': 'calendar'}, store.validate_event(events[0]), events[0])
+            self.assertEqual(provider.request.call_args.kwargs['json']['start'], provider.request.call_args.kwargs['json']['end'])
+
+    def test_invalid_google_event_keeps_cache_and_reports_sync_error(self):
+        from calendar_backend import dispatch
+        identifier = store.add_calendar('Google', provider='google', account='account', remote='calendar')
+        store.save_event(identifier, dict(title='Keep', start='2026-11-12', end='2026-11-13', allDay=True))
+        provider = object.__new__(cloud.Google)
+        provider.pages = Mock(return_value=[{'id': 'bad', 'start': {'date': '2026-11-12'}, 'end': {'date': '2026-11-11'}}])
+        with patch.object(cloud, 'provider', return_value=provider):
+            with self.assertRaisesRegex(ValueError, 'Sync failed.*Cached events'):
+                dispatch(dict(action='sync', start='2026-11-01', end='2026-11-30'))
+        snapshot = store.snapshot('2026-11-01', '2026-11-30')
+        self.assertEqual(snapshot['events'][0]['title'], 'Keep')
+        self.assertIn('Sync failed', snapshot['syncError'])
+        self.assertIn('Google returned an event with invalid dates', snapshot['syncError'])
+
+    def test_google_invalid_timezone_is_reported_without_event_details(self):
+        with self.assertRaisesRegex(cloud.InvalidRemoteEvent, 'invalid dates or time zone') as failure:
+            cloud.google_time({'dateTime': '2026-11-12T10:00:00', 'timeZone': 'private-invalid-zone'})
+        self.assertNotIn('private-invalid-zone', str(failure.exception))
     def test_stale_editor_cannot_use_a_newly_refreshed_etag(self):
         from calendar_backend import dispatch
         identifier = store.add_calendar('Google', provider='google', account='account', remote='calendar')
@@ -100,6 +142,23 @@ class RecurrenceTests(unittest.TestCase):
 
 @unittest.skipUnless(HAS_ICAL, 'Cloud dependencies are not installed')
 class ICloudAdapterTests(unittest.TestCase):
+    def test_discovered_calendar_uses_its_own_icloud_server(self):
+        import caldav
+        calendar = {'provider': 'icloud', 'account': 'fixture', 'remote': 'https://p123-caldav.icloud.com/fixture/calendar/'}
+        with patch.object(cloud, 'read_account', return_value={'username': 'fixture', 'password': 'fixture'}):
+            provider = cloud.provider(calendar)
+        try:
+            collection = caldav.Calendar(client=provider.client, url=calendar['remote'])
+            self.assertEqual(str(collection.url), calendar['remote'])
+        finally:
+            provider.client.close()
+
+    def test_untrusted_calendar_server_rejected_before_reading_credentials(self):
+        with patch.object(cloud, 'read_account') as read:
+            with self.assertRaisesRegex(ValueError, 'unexpected calendar address'):
+                cloud.provider({'provider': 'icloud', 'account': 'fixture', 'remote': 'https://icloud.com.evil.test/calendar/'})
+            read.assert_not_called()
+
     def test_fetch_expands_series_and_retains_resource_etag(self):
         import caldav
         provider = object.__new__(cloud.ICloud)

@@ -12,11 +12,11 @@
 - Uses the accent and animation setting from Velunori Appearance, including its live preview.
 
 - Create, edit and delete timed or all-day events in local calendars; filter the agenda by calendar.
-- Connect Google or iCloud calendars for bidirectional event synchronization. Existing recurring events are expanded into occurrences; editing or deleting one affects that occurrence.
+- Connect Google through browser sign-in or iCloud with an app-specific password for bidirectional event synchronization. Google sign-in requires a release configured with Velunori's OAuth registration. Existing recurring events are expanded into occurrences; editing or deleting one affects that occurrence.
 - Sync when opening a new month and every ten minutes while the panel is open, or use Sync manually. Cached events remain available offline; remote conflict checks prevent overwriting changed events.
-- Calendar management, account connection and event editing stay inside the panel. The popup fits the monitor and scrolls when necessary; account connection stays visible in a fixed footer.
+- Calendar management, account connection and event editing stay inside the panel. The popup fits the monitor and scrolls when necessary; the calendar list, local-calendar creation and account connection have separate views with accessible footer actions.
 
-Cloud providers are implemented and covered by mocked/fixture tests; real account authentication and server interoperability have **not** been verified in a live desktop session. Setup instructions and current limits are in [docs/calendar-sync.md](docs/calendar-sync.md).
+Google and iCloud sign-in and bidirectional create/edit/delete have been exercised against real accounts through the installed backend. Timed/all-day events, ETag conflicts and preservation of unrelated remote properties passed. Scope and remaining live checks are recorded in [docs/live-calendar-validation.md](docs/live-calendar-validation.md); automated provider tests still use mocks and fixtures. Setup instructions and current limits are in [docs/calendar-sync.md](docs/calendar-sync.md).
 
 ## Requirements
 
@@ -71,7 +71,7 @@ Tests cover month grids, daylight saving changes, agenda filtering, local storag
 
 ## Limits
 
-Cloud sign-in and writes still require live account testing. New recurrence rules and whole-series editing are not supported; existing occurrences can be edited or removed individually. Account credentials are stored privately on disk without encryption. Popup placement, keyboard focus and scrolling need a real desktop check.
+Live recurrence edits, DST edge cases, offline recovery and long-term token refresh still need verification. iCloud birthdays generated from Contacts are not included; this integration reads CalDAV calendars, not Contacts. New recurrence rules and whole-series editing are not supported; existing occurrences can be edited or removed individually. Account credentials are stored privately on disk without encryption. Popup placement, keyboard focus and scrolling need a real desktop check.
 
 ## Velunori plugins
 

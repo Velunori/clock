@@ -11,8 +11,10 @@ Item {
     property var backend: null
     property bool editing: false
     property bool sourcesOpen: false
-    onEditingChanged: scroll.contentY = 0
-    onSourcesOpenChanged: scroll.contentY = 0
+    property string sourcePage: "overview"
+    onSourcePageChanged: { scroll.contentY = 0; if (backend) backend.errorText = ""; }
+    onEditingChanged: { scroll.contentY = 0; if (backend) backend.errorText = ""; }
+    onSourcesOpenChanged: { sourcePage = "overview"; scroll.contentY = 0; if (backend) backend.errorText = ""; }
     property string filterCalendar: ""
     readonly property var events: backend ? backend.snapshot.events : []
     readonly property string selectedDay: Calendar.isoDay(selectedDate)
@@ -24,11 +26,12 @@ Item {
         target: root.backend
         function onCompleted(request, response) {
             if (!response.ok) return;
-            if (request.action === "addCalendar") calendarName.clear();
+            if (request.action === "addCalendar") { calendarName.clear(); root.sourcePage = "overview"; }
+            if (request.action === "connectGoogle" || request.action === "connectIcloud") root.sourcePage = "overview";
             if (request.action === "disconnect" || request.action === "visibility") { root.filterCalendar = ""; filter.currentIndex = 0; }
         }
     }
-    function back() { if (editing) editing = false; else if (sourcesOpen) sourcesOpen = false; else return false; return true; }
+    function back() { if (editing) editing = false; else if (sourcesOpen && sourcePage !== "overview") sourcePage = "overview"; else if (sourcesOpen) sourcesOpen = false; else return false; return true; }
     property date today: new Date()
     property int weekStart: Qt.locale().firstDayOfWeek % 7
     property int viewYear: today.getFullYear()
@@ -38,7 +41,7 @@ Item {
     readonly property var cells: Calendar.monthCells(viewYear, viewMonth, weekStart, today, selectedDate)
     Keys.onEscapePressed: function(event) { event.accepted = root.back(); }
     implicitWidth: 336
-    implicitHeight: 600
+    implicitHeight: sourcesOpen ? Math.min(600, Math.max(300, sources.implicitHeight + 120)) : 600
     Velunori.Theme { id: theme; bar: root.bar }
 
     function resetToday() {
@@ -64,7 +67,7 @@ Item {
             Layout.fillWidth: true
             Text { text: "CALENDAR"; color: theme.accent; font.family: theme.fontFamily; font.pixelSize: 11; font.letterSpacing: 2 }
             Item { Layout.fillWidth: true }
-            Velunori.Button { visible: !root.editing; bar: root.bar; text: root.sourcesOpen ? "Done" : "Calendars"; implicitHeight: 30; implicitWidth: 92; onClicked: root.sourcesOpen = !root.sourcesOpen }
+            Velunori.Button { visible: !root.editing; bar: root.bar; text: root.sourcesOpen ? (root.sourcePage === "overview" ? "Done" : "Back") : "Calendars"; implicitHeight: 30; implicitWidth: 92; onClicked: { if (root.sourcesOpen) root.back(); else root.sourcesOpen = true; } }
         }
         Flickable {
             id: scroll
@@ -80,80 +83,99 @@ Item {
             ScrollBar.vertical: ScrollBar { policy: scroll.contentHeight > scroll.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff }
             EventEditor { id: editor; visible: root.editing; width: parent.width - 10; backend: root.backend; bar: root.bar; onDone: { root.editing = false; scroll.contentY = 0; } }
             ColumnLayout {
-                id: sources; visible: root.sourcesOpen && !root.editing; width: parent.width - 10; spacing: 14
-                Text { text: "Your calendars"; color: theme.text; font.pixelSize: 20; font.weight: Font.DemiBold }
-                Text { text: "Choose which calendars appear in your agenda."; color: theme.muted; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                Repeater {
-                    model: root.backend ? root.backend.snapshot.calendars : []
-                    RowLayout {
-                        id: sourceRow
-                        Layout.minimumWidth: sources.width
-                        required property var modelData
-                        Layout.fillWidth: true
-                        Rectangle { width: 8; height: 8; radius: 4; color: sourceRow.modelData.color }
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            Text { text: sourceRow.modelData.name; color: theme.text; font.pixelSize: 14 }
-                            Text { text: sourceRow.modelData.provider === "local" ? "On this computer" : sourceRow.modelData.provider; color: theme.muted; font.pixelSize: 11 }
-                        }
-                        Velunori.Toggle { checked: !!sourceRow.modelData.enabled; accent: theme.accent; enabled: !root.backend.busy; onClicked: root.backend.perform({action: "visibility", id: sourceRow.modelData.id, enabled: checked}) }
-                    }
-                }
-                Repeater {
-                    model: root.backend ? root.backend.snapshot.calendars.filter(function(row, index, rows) { return row.account && rows.findIndex(function(other) { return other.account === row.account; }) === index; }) : []
-                    RowLayout {
-                        id: accountRow
-                        required property var modelData
-                        property bool confirming: false
-                        Layout.fillWidth: true
-                        Text { text: accountRow.modelData.provider === "google" ? "Google account" : "iCloud account"; color: theme.muted; font.pixelSize: 12; Layout.fillWidth: true }
-                        Velunori.Button { bar: root.bar; text: accountRow.confirming ? "Confirm disconnect" : "Disconnect"; implicitHeight: 30; implicitWidth: 140; enabled: !root.backend.busy; onClicked: { if (accountRow.confirming) root.backend.perform({action: "disconnect", account: accountRow.modelData.account}); else accountRow.confirming = true; } }
-                    }
-                }
-                RowLayout {
-                    Layout.fillWidth: true
-                    Text { text: root.backend && root.backend.snapshot.lastSync ? "Synced " + Qt.formatDateTime(new Date(root.backend.snapshot.lastSync), "d MMM, HH:mm") : "Not synced yet"; color: theme.muted; font.pixelSize: 11; Layout.fillWidth: true }
-                    Velunori.Button { bar: root.bar; text: "Sync"; implicitWidth: 70; implicitHeight: 30; enabled: root.backend && !root.backend.busy; onClicked: root.backend.perform({action: "sync"}) }
-                }
-                Text { visible: root.backend && !!root.backend.snapshot.syncError; text: root.backend ? root.backend.snapshot.syncError || "" : ""; color: "#eaa7bb"; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.border }
-                Text { text: "New local calendar"; color: theme.text; font.pixelSize: 14 }
-                Field { bar: root.bar; id: calendarName; Layout.fillWidth: true; placeholderText: "Calendar name"; color: theme.text }
-                RowLayout {
-                    id: colors
-                    property string selected: "#c4aff1"
+                id: sources; objectName: "calendarSources"; visible: root.sourcesOpen && !root.editing; width: parent.width - 10; spacing: 14
+                ColumnLayout {
+                    visible: root.sourcePage === "overview"; Layout.fillWidth: true; spacing: 10
+                    Text { text: "Your calendars"; color: theme.text; font.pixelSize: 20; font.weight: Font.DemiBold }
+                    Text { text: "Choose which calendars appear in your agenda."; color: theme.muted; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     Repeater {
-                        model: ["#c4aff1", "#a0ddbf", "#e8bf8a", "#91baf0", "#eaa7bb"]
-                        AbstractButton {
-                            id: colorButton
-                            required property string modelData
-                            implicitWidth: 28; implicitHeight: 28
-                            Accessible.name: "Calendar color " + modelData
-                            onClicked: colors.selected = modelData
-                            background: Rectangle { radius: 14; color: colorButton.modelData; border.width: colors.selected === colorButton.modelData ? 3 : 0; border.color: theme.text }
+                        model: root.backend ? root.backend.snapshot.calendars : []
+                        RowLayout {
+                            id: sourceRow
+                            Layout.minimumWidth: 0; Layout.minimumHeight: 42
+                            required property var modelData
+                            Layout.fillWidth: true
+                            Rectangle { width: 8; height: 8; radius: 4; color: sourceRow.modelData.color }
+                            ColumnLayout {
+                                Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 3
+                                Text { objectName: "sourceName"; text: sourceRow.modelData.name; textFormat: Text.PlainText; color: theme.text; font.pixelSize: 14; Layout.fillWidth: true; elide: Text.ElideRight }
+                                Text { text: sourceRow.modelData.provider === "local" ? "On this computer" : sourceRow.modelData.provider === "google" ? "Google Calendar" : "iCloud Calendar"; textFormat: Text.PlainText; color: theme.muted; font.pixelSize: 11 }
+                            }
+                            Velunori.Toggle { checked: !!sourceRow.modelData.enabled; accent: theme.accent; enabled: !root.backend.busy; onClicked: root.backend.perform({action: "visibility", id: sourceRow.modelData.id, enabled: checked}) }
                         }
                     }
-                    Item { Layout.fillWidth: true }
-                    Velunori.Button { bar: root.bar; text: "Create"; implicitWidth: 80; enabled: calendarName.text.trim() !== "" && root.backend && !root.backend.busy; onClicked: root.backend.perform({action: "addCalendar", name: calendarName.text, color: colors.selected}) }
-                }
-                Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.border }
-                Text { text: "Connect an account"; color: theme.text; font.pixelSize: 16; font.weight: Font.Medium }
-                RowLayout {
-                    Layout.fillWidth: true
-                    Velunori.Button { bar: root.bar; text: "Google"; primary: connection.provider === "google"; onClicked: connection.provider = "google" }
-                    Velunori.Button { bar: root.bar; text: "iCloud"; primary: connection.provider === "icloud"; onClicked: connection.provider = "icloud" }
+                    Repeater {
+                        model: root.backend ? root.backend.snapshot.calendars.filter(function(row, index, rows) { return row.account && rows.findIndex(function(other) { return other.account === row.account; }) === index; }) : []
+                        RowLayout {
+                            id: accountRow
+                            required property var modelData
+                            property bool confirming: false
+                            Layout.fillWidth: true
+                            Text { text: accountRow.modelData.provider === "google" ? "Google account" : "iCloud account"; color: theme.muted; font.pixelSize: 12; Layout.fillWidth: true }
+                            Velunori.Button { bar: root.bar; text: accountRow.confirming ? "Confirm disconnect" : "Disconnect"; implicitHeight: 30; implicitWidth: 140; enabled: !root.backend.busy; onClicked: { if (accountRow.confirming) root.backend.perform({action: "disconnect", account: accountRow.modelData.account}); else accountRow.confirming = true; } }
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text { text: root.backend && root.backend.snapshot.lastSync ? "Synced " + Qt.formatDateTime(new Date(root.backend.snapshot.lastSync), "d MMM, HH:mm") : "Not synced yet"; color: theme.muted; font.pixelSize: 11; Layout.fillWidth: true }
+                        Velunori.Button { bar: root.bar; text: "Sync"; implicitWidth: 70; implicitHeight: 30; enabled: root.backend && !root.backend.busy; onClicked: root.backend.perform({action: "sync"}) }
+                    }
+                    Text { visible: root.backend && !!root.backend.snapshot.syncError; text: root.backend ? root.backend.snapshot.syncError || "" : ""; color: "#eaa7bb"; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 }
                 ColumnLayout {
-                    id: connection
-                    objectName: "accountConnection"
-                    property string provider: "google"
-                    Layout.fillWidth: true; spacing: 10
-                    Text { text: connection.provider === "google" ? "Use your Google Desktop OAuth client JSON. Sign-in opens in your browser." : "Use your Apple Account and an app-specific password."; color: theme.muted; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                    Field { id: clientFile; bar: root.bar; visible: connection.provider === "google"; Layout.fillWidth: true; placeholderText: "Path to Desktop client JSON" }
-                    Field { id: appleId; bar: root.bar; visible: connection.provider === "icloud"; Layout.fillWidth: true; placeholderText: "Apple Account email" }
-                    Field { id: applePassword; bar: root.bar; visible: connection.provider === "icloud"; Layout.fillWidth: true; placeholderText: "App-specific password"; echoMode: TextInput.Password }
-                    Text { text: "Account credentials are stored privately on this computer. Disconnect removes the local account and cache; remote events stay in your account."; color: theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    visible: root.sourcePage === "new"; Layout.fillWidth: true; spacing: 12
+                    Text { text: "New local calendar"; color: theme.text; font.pixelSize: 14 }
+                    Field { bar: root.bar; id: calendarName; Layout.fillWidth: true; placeholderText: "Calendar name"; color: theme.text }
+                    RowLayout {
+                        id: colors
+                        property string selected: "#c4aff1"
+                        Repeater {
+                            model: ["#c4aff1", "#a0ddbf", "#e8bf8a", "#91baf0", "#eaa7bb"]
+                            AbstractButton {
+                                id: colorButton
+                                required property string modelData
+                                implicitWidth: 28; implicitHeight: 28
+                                Accessible.name: "Calendar color " + modelData
+                                onClicked: colors.selected = modelData
+                                background: Rectangle { radius: 14; color: colorButton.modelData; border.width: colors.selected === colorButton.modelData ? 3 : 0; border.color: theme.text }
+                            }
+                        }
+                        Item { Layout.fillWidth: true }
+                        Velunori.Button { bar: root.bar; text: "Create"; implicitWidth: 80; enabled: calendarName.text.trim() !== "" && root.backend && !root.backend.busy; onClicked: root.backend.perform({action: "addCalendar", name: calendarName.text, color: colors.selected}) }
+                    }
+                }
+                ColumnLayout {
+                    visible: root.sourcePage === "connect"; Layout.fillWidth: true; spacing: 12
+                    Text { text: "Connect an account"; color: theme.text; font.pixelSize: 16; font.weight: Font.Medium }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Velunori.Button { bar: root.bar; text: "Google"; primary: connection.provider === "google"; onClicked: connection.provider = "google" }
+                        Velunori.Button { bar: root.bar; text: "iCloud"; primary: connection.provider === "icloud"; onClicked: connection.provider = "icloud" }
+                    }
+                    ColumnLayout {
+                        id: connection
+                        objectName: "accountConnection"
+                        property string provider: "google"
+                        Layout.fillWidth: true; spacing: 10
+                        Text { text: connection.provider === "google" ? "Connect Google Calendar" : "Set up iCloud Calendar"; color: theme.text; font.pixelSize: 14; font.weight: Font.Medium; Layout.fillWidth: true }
+                        Text { text: connection.provider === "google" ? "Sign in with Google in your browser and approve calendar access. Your calendars will sync in both directions." : "You need an Apple Account with two-factor authentication and an app-specific password."; textFormat: Text.PlainText; color: theme.muted; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                        Text {
+                            objectName: "googleSignInUnavailable"
+                            visible: connection.provider === "google" && root.backend && !root.backend.snapshot.googleSignInReady
+                            text: "Google sign-in is not available in this build. Velunori's Google application registration still needs to be configured."
+                            textFormat: Text.PlainText; color: theme.muted; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true
+                        }
+                        ColumnLayout {
+                            visible: connection.provider === "icloud"
+                            Layout.fillWidth: true; spacing: 10
+                            Text { text: "1. Open your Apple Account → Sign-In and Security → App-Specific Passwords. Choose Generate an app-specific password and name it Velunori Calendar.\n\n2. Enter your Apple Account email and the generated password below, then press Connect iCloud."; textFormat: Text.PlainText; color: theme.text; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                            Velunori.Button { objectName: "icloudSetup"; bar: root.bar; text: "Open Apple Account ↗"; Layout.fillWidth: true; onClicked: Qt.openUrlExternally("https://account.apple.com/") }
+                        }
+                        Field { id: appleId; bar: root.bar; visible: connection.provider === "icloud"; Layout.fillWidth: true; placeholderText: "Apple Account email" }
+                        Field { id: applePassword; bar: root.bar; visible: connection.provider === "icloud"; Layout.fillWidth: true; placeholderText: "App-specific password"; echoMode: TextInput.Password }
+                        Text { text: "Account credentials are stored privately on this computer. Disconnect removes the local account and cache; remote events stay in your account."; color: theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
 
+                    }
                 }
 
             }
@@ -234,18 +256,24 @@ Item {
                 }
             }
         }
-        Text { visible: root.backend && root.backend.errorText !== ""; text: root.backend ? root.backend.errorText : ""; color: "#eaa7bb"; wrapMode: Text.WordWrap; font.pixelSize: 12; Layout.fillWidth: true }
+        Text { visible: root.backend && root.backend.errorText !== "" && !(root.sourcesOpen && root.sourcePage === "overview" && root.backend.errorText === root.backend.snapshot.syncError); text: root.backend ? root.backend.errorText : ""; color: "#eaa7bb"; wrapMode: Text.WordWrap; font.pixelSize: 12; Layout.fillWidth: true }
+        RowLayout {
+            visible: root.sourcesOpen && !root.editing && root.sourcePage === "overview"
+            Layout.fillWidth: true; spacing: 10
+            Velunori.Button { objectName: "newCalendar"; bar: root.bar; text: "New calendar"; Layout.fillWidth: true; implicitHeight: 38; onClicked: root.sourcePage = "new" }
+            Velunori.Button { objectName: "addAccount"; bar: root.bar; text: "Add account"; primary: true; Layout.fillWidth: true; implicitHeight: 38; onClicked: root.sourcePage = "connect" }
+        }
         ColumnLayout {
-            visible: root.sourcesOpen && !root.editing
+            visible: root.sourcesOpen && !root.editing && root.sourcePage === "connect"
             Layout.fillWidth: true; spacing: 12
             Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.border }
             Velunori.Button {
                 objectName: "connectAccount"
                 Layout.fillWidth: true; Layout.minimumHeight: 38; implicitHeight: 38
                 bar: root.bar; text: root.backend && root.backend.busy ? "Connecting / syncing…" : connection.provider === "icloud" ? "Connect iCloud" : "Connect Google"; primary: true
-                enabled: root.backend && !root.backend.busy && (connection.provider === "google" ? clientFile.text.trim() !== "" : appleId.text.trim() !== "" && applePassword.text !== "")
+                enabled: root.backend && !root.backend.busy && (connection.provider === "google" ? !!root.backend.snapshot.googleSignInReady : appleId.text.trim() !== "" && applePassword.text !== "")
                 onClicked: {
-                    if (connection.provider === "google") root.backend.perform({action: "connectGoogle", clientFile: clientFile.text});
+                    if (connection.provider === "google") root.backend.perform({action: "connectGoogle"});
                     else { root.backend.perform({action: "connectIcloud", username: appleId.text, password: applePassword.text}); applePassword.clear(); }
                 }
             }
