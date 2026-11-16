@@ -40,6 +40,18 @@ omarchy plugin enable omarchy.clock --section center --before velunori.clock
 omarchy plugin disable velunori.clock
 ```
 
+### Update
+
+For copies installed with the Velunori suite installer, run this from an unlocked desktop terminal, without `sudo`:
+
+```bash
+curl -fsSL https://velunori.github.io/install.sh | bash -s -- update --components clock
+```
+
+The latest installer asks for confirmation, keeps your settings, calendars and connected accounts, backs up the previous plugin files and restarts the shell. Add `--dry-run` to check without applying changes. Existing cloud libraries are retained; if the updater requests new dependencies, repeat with `--cloud`. Use the same `--prefix` if you chose a custom receipt directory.
+
+YAPM/Omarchy's Git updater cannot update these copied files. For a source checkout linked by `scripts/install-local.sh`, update this checkout and its compatible sibling library instead, then run `omarchy restart shell`. The suite updater refuses development links and unrelated installations.
+
 ## Configuration
 
 Settings sit on the widget's entry in `bar.layout`:
