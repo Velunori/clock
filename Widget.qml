@@ -3,7 +3,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Ui
-import "../velunori.core/kit" as Velunori
+import "../lib/kit" as Velunori
 import "CalendarModel.js" as Calendar
 
 Item {

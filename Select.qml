@@ -1,7 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
-import "../velunori.core/kit" as V
+import "../lib/kit" as V
 ComboBox {
     id: root
     property var bar: null

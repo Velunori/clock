@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Controls
-import "../velunori.core/kit" as V
+import "../lib/kit" as V
 TextField {
     id: root
     property var bar: null

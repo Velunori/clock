@@ -20,16 +20,18 @@ Cloud providers are implemented and covered by mocked/fixture tests; real accoun
 
 ## Requirements
 
-[Velunori core](https://github.com/velunori/core) 0.4.1 or later, installed next to this plugin. Developed against **Omarchy 4.0.6-1**.
+[Velunori Library](https://github.com/Velunori/lib) API 1 (version 1.x), installed in the real sibling `lib/` directory. Works with the stock Omarchy bar; Floating Bars is optional. Developed against **Omarchy 4.0.6-1**.
 
 ## Install
 
+Install the shared library first, then run from this repository directory:
+
 ```bash
-bash ~/dev/Velunori/clock/scripts/install-local.sh
+bash scripts/install-local.sh
 omarchy restart shell
 ```
 
-The installer checks core, backs up `shell.json`, links this checkout to `~/.config/omarchy/plugins/velunori.clock` and puts the clock where `omarchy.clock` was. Other widgets stay in place.
+The installer checks the library, backs up `shell.json`, links this checkout to `~/.config/omarchy/plugins/velunori.clock` and puts the clock where `omarchy.clock` was. Other widgets stay in place.
 
 Return to the built-in clock:
 
@@ -61,7 +63,7 @@ bash scripts/check.sh
 VELUNORI_TEST_LAYOUT=symlink bash scripts/check.sh
 ```
 
-Tests cover month grids, daylight saving changes, agenda filtering, local storage, QML-to-Python create/delete round trips, provider pagination/conflicts and iCalendar recurrence overrides. Cloud tests use fixtures, never connected accounts. Set `VELUNORI_CORE_PATH` if core is checked out elsewhere, and `VELUNORI_TEST_STARTS=3` for repeated cold starts.
+Tests cover month grids, daylight saving changes, agenda filtering, local storage, QML-to-Python create/delete round trips, provider pagination/conflicts and iCalendar recurrence overrides. Cloud tests use fixtures, never connected accounts. Set `VELUNORI_LIB_PATH` if the library is checked out elsewhere, and `VELUNORI_TEST_STARTS=3` for repeated cold starts.
 
 `bash scripts/check-session.sh --restart`, run from a desktop terminal, checks the real clock geometry and that the calendar opens and closes, and looks for new crash reports.
 
@@ -77,7 +79,7 @@ Velunori is a set of independent plugins for the [Omarchy](https://omarchy.org) 
 
 | Plugin | What it is |
 | --- | --- |
-| [core](https://github.com/velunori/core) | The Island and Orbit bars, the appearance settings and the shared design kit |
+| [bar](https://github.com/Velunori/bar) | The Island and Orbit bars, the appearance settings and the shared design kit |
 | **clock** (this repository) | Clock in the bar with a month calendar |
 | [control-center](https://github.com/velunori/control-center) | Sound, displays, network, capture and reminders in one panel |
 | [notifications](https://github.com/velunori/notifications) | Notification cards and a session history |

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 repo_dir=$(cd "$(dirname "$0")/.." && pwd -P)
-core_dir="${VELUNORI_CORE_PATH:-$(dirname "$repo_dir")/core}"
+lib_dir="${VELUNORI_LIB_PATH:-$(dirname "$repo_dir")/lib}"
 layout="${VELUNORI_TEST_LAYOUT:-copy}"
 starts="${VELUNORI_TEST_STARTS:-1}"
 [[ "$starts" =~ ^[0-9]+$ ]] && (( starts >= 1 && starts <= 20 )) || { echo 'Test starts must be 1..20' >&2; exit 1; }
 [[ "$layout" == copy || "$layout" == symlink ]] || { echo 'Unknown test layout' >&2; exit 1; }
-[[ -f "$core_dir/kit/Theme.qml" ]] || { echo 'Velunori core 0.4.1 is required.' >&2; exit 1; }
+[[ -f "$lib_dir/kit/Theme.qml" ]] || { echo 'Velunori Library API 1 is required.' >&2; exit 1; }
 calendar_python=python3
 if [[ -x "$repo_dir/.venv/bin/python" ]]; then calendar_python="$repo_dir/.venv/bin/python"; fi
 "$calendar_python" -m unittest discover -s "$repo_dir/tests" -p 'test_*.py'
@@ -17,17 +17,15 @@ trap 'rm -rf "$runtime_dir"' EXIT
 chmod 700 "$runtime_dir"
 source_dir="$runtime_dir"
 if [[ "$layout" == symlink ]]; then source_dir="$runtime_dir/checkouts"; fi
-mkdir -p "$source_dir/velunori.clock" "$source_dir/velunori.core"
+mkdir -p "$source_dir/velunori.clock" "$source_dir/lib"
 cp "$repo_dir/"*.qml "$repo_dir/"*.js "$repo_dir/qmldir" "$repo_dir/"*.py "$source_dir/velunori.clock/"
 mkdir -p "$source_dir/velunori.clock/scripts"
 cp "$repo_dir/scripts/calendar-backend.sh" "$source_dir/velunori.clock/scripts/"
-cp -r "$core_dir/kit" "$core_dir/design" "$core_dir/components" "$source_dir/velunori.core/"
+cp -r "$lib_dir/kit" "$lib_dir/design" "$lib_dir/components" "$source_dir/lib/"
 if [[ "$layout" == symlink ]]; then
   mv "$source_dir/velunori.clock" "$source_dir/clock"
-  mv "$source_dir/velunori.core" "$source_dir/core"
-  ln -s core "$source_dir/velunori.core"
   ln -s "$source_dir/clock" "$runtime_dir/velunori.clock"
-  ln -s "$source_dir/core" "$runtime_dir/velunori.core"
+  ln -s "$source_dir/lib" "$runtime_dir/lib"
 fi
 mkdir -p "$runtime_dir/imports/qs"
 shell_dir="${OMARCHY_PATH:-/usr/share/omarchy}/shell"
@@ -38,7 +36,7 @@ ln -s "$shell_dir/Ui" "$runtime_dir/Ui"
 /usr/lib/qt6/bin/qmllint -I "$runtime_dir/imports" \
   --unqualified info --missing-property warning --incompatible-type info \
   "$runtime_dir/velunori.clock/"*.qml \
-  "$runtime_dir/velunori.core/kit/"*.qml > "$runtime_dir/lint.log" 2>&1 || {
+  "$runtime_dir/lib/kit/"*.qml > "$runtime_dir/lint.log" 2>&1 || {
     cat "$runtime_dir/lint.log"; exit 1;
   }
 cp "$repo_dir/tests/calendar.qml" "$runtime_dir/shell.qml"

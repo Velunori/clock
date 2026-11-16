@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import "../velunori.core/kit" as Velunori
+import "../lib/kit" as Velunori
 import "CalendarModel.js" as Calendar
 
 Item {

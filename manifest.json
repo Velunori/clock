@@ -4,19 +4,48 @@
   "name": "Velunori Clock",
   "version": "0.2.0",
   "author": "Velunori",
-  "description": "Clock and calendar built with the Velunori core design kit.",
-  "kinds": ["bar-widget"],
-  "entryPoints": {"barWidget": "Widget.qml"},
+  "description": "Clock and calendar built with the Velunori library design kit.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Widget.qml"
+  },
   "barWidget": {
     "displayName": "Velunori Clock",
     "category": "Time",
     "allowMultiple": false,
     "defaultSection": "center",
-    "defaults": {"timeFormat": "HH:mm", "dateFormat": "ddd, d MMM", "showDate": true},
+    "defaults": {
+      "timeFormat": "HH:mm",
+      "dateFormat": "ddd, d MMM",
+      "showDate": true
+    },
     "schema": [
-      {"key": "timeFormat", "type": "string", "label": "Time format"},
-      {"key": "dateFormat", "type": "string", "label": "Date format"},
-      {"key": "showDate", "type": "boolean", "label": "Show date"}
+      {
+        "key": "timeFormat",
+        "type": "string",
+        "label": "Time format"
+      },
+      {
+        "key": "dateFormat",
+        "type": "string",
+        "label": "Date format"
+      },
+      {
+        "key": "showDate",
+        "type": "boolean",
+        "label": "Show date"
+      }
     ]
+  },
+  "velunori": {
+    "dependencies": {
+      "velunori.lib": {
+        "apiVersion": 1,
+        "minimumVersion": "1.0.0",
+        "maximumExclusive": "2.0.0"
+      }
+    }
   }
 }

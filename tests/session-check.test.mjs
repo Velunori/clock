@@ -33,7 +33,7 @@ case "$1:$2" in
   velunori.clock:status)
     opened=false
     if [[ -f "$SESSION_TEST_STATE" && $(cat "$SESSION_TEST_STATE") == open ]]; then opened=true; fi
-    printf '{"instances":[{"opened":%s}]}\n' "$opened" ;;
+    printf '{"instances":[{"opened":%s,"width":150}]}\n' "$opened" ;;
   *) exit 1 ;;
 esac
 `);
@@ -51,8 +51,6 @@ test('session checker verifies visible widget and calendar lifecycle', () => {
     assert.equal(result.status, 0, result.stdout + result.stderr);
     assert.match(result.stdout, /calendar opened/);
     assert.match(result.stdout, /calendar closed/);
-    assert.match(result.stdout, /Control Center opened/);
-    assert.match(result.stdout, /Control Center closed/);
 });
 
 test('successful restart with a crash report must fail the session check', () => {

@@ -5,7 +5,6 @@ set -euo pipefail
 check_dir=$(mktemp -d)
 active_test_panel=""
 cleanup() {
-  omarchy-shell velunori hideSettings >/dev/null 2>&1 || true
   omarchy-shell shell hide velunori.clock >/dev/null 2>&1 || true
   if [[ -n "$active_test_panel" ]]; then omarchy-shell shell hide "$active_test_panel" >/dev/null 2>&1 || true; fi
   rm -rf "$check_dir"
@@ -34,29 +33,8 @@ wait_json() {
 }
 
 [[ $(omarchy-shell shell ping) == ok ]]
-wait_json velunori 'data.get("ready") and any(w["id"] == "velunori.clock" and w["visible"] and w["width"] > 0 for w in data["widgets"])'
+wait_json velunori.clock 'any(w.get("width",0)>0 for w in data.get("instances",[]))'
 echo 'PASS: clock is loaded and has visible bar geometry.'
-wait_json velunori 'not any(w["id"] == "omarchy.indicators" for w in data["widgets"])'
-echo 'PASS: legacy hover controls are absent from all bar surfaces.'
-wait_json velunori 'not any(w["id"] in ("omarchy.monitor", "omarchy.power", "omarchy.audio") and w["visible"] for w in data["widgets"])'
-echo 'PASS: hardware controls are hosted by Control Center instead of bar icons.'
-omarchy-shell velunori settings
-wait_json velunori 'data.get("controlCenterOpened")'
-echo 'PASS: Control Center opened.'
-omarchy-shell velunori hideSettings
-wait_json velunori 'not data.get("controlCenterOpened")'
-echo 'PASS: Control Center closed.'
-panels=$(omarchy-shell velunori status | python3 -c 'import json,sys; print("\n".join(json.load(sys.stdin).get("availableControlPanels", [])))')
-while IFS= read -r panel; do
-  [[ -n "$panel" ]] || continue
-  active_test_panel="$panel"
-  [[ $(omarchy-shell shell summon "$panel" '{}') == ok ]]
-  wait_json velunori 'data.get("activePanel") == expected' "$panel"
-  omarchy-shell shell hide "$panel"
-  wait_json velunori 'data.get("activePanel") != expected' "$panel"
-  active_test_panel=""
-  echo "PASS: hosted $panel panel opened and closed."
-done <<< "$panels"
 [[ $(omarchy-shell shell summon velunori.clock '{}') == ok ]]
 wait_json velunori.clock 'any(w["opened"] for w in data["instances"])'
 echo 'PASS: calendar opened through the host.'

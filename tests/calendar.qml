@@ -2,7 +2,7 @@
 import Quickshell
 import QtQuick
 import "velunori.clock"
-import "velunori.core/kit" as Velunori
+import "lib/kit" as Velunori
 
 ShellRoot {
     id: tests
